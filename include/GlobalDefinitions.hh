@@ -40,6 +40,15 @@
 //^if defined, then zero reflectivity is taken for VUV photons.
 #endif
 
+//#define NO_QE_
+//#define NO_WLS_PROC
+//#define ZERO_CE_
+//#define UNITY_CE_
+//#define NO_BACK_SCATTERING
+//#define NO_VUV_WLS_FRESNEL
+//#define AVERAGE_QE_
+#define NO_Xp_WLS
+
 //#define AR_EMISSION_NITRO
 //^if defined then initial photon's energy is defined by a continoius spectrum of N2 admixture
 //otherwise 128nm line is taken
@@ -47,6 +56,19 @@
 //#define AR_SPEC_TEST
 //^if defiened, then no memory decrease, top absorbed behind mesh is detector, all photons go through GEM to it;
 //^and get_detected_spectrum called after simulation. All in order to check Ar emission spectrum generation
+#endif
+
+#define TEST_WLS_SPECTRA
+#ifdef TEST_WLS_SPECTRA
+#define WLS_MIN_EN (2.06*eV)
+#define WLS_MAX_EN (3.26*eV)
+#define EN_BINS_N_ 500 
+#endif
+
+//#define SPATIAL_ANGLE_
+#ifdef SPATIAL_ANGLE_
+#define NO_QE_
+#define UNITY_CE_
 #endif
 
 //\/in mm, diameter of cylindrical area where photons are generated
@@ -89,6 +111,7 @@
 #define TEST_WLS_OUT_SPEC "WLS_spec_out.txt"
 #define TEST_WLS_OUT_I_SPEC "WLS_integral_spec_out.txt"
 #define TEST_OUT_I_SPEC1 "WLS_spec_out_reverse.txt"
+#define DETECTED_SPECTRUM "detected_spectrum.txt"
 #ifdef REFINED_CU_MODEL
 #define COPPER_REFLECTIVITY "CU_reflectivity_refined.txt"
 #else

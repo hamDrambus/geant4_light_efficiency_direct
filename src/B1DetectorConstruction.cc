@@ -29,6 +29,57 @@ B1DetectorConstruction::B1DetectorConstruction()
 	y_rot_m = NULL;
 	top_GEM = NULL;
 	bot_GEM = NULL;
+	top_ps_plate = NULL; //just a solid plate
+	bot_ps_plate = NULL;
+	top_cu_plate = NULL; //just a solid plate
+	bot_cu_plate=NULL;
+	LAr_layer = NULL;
+	bot_LAr_layer = NULL;
+
+	Xp_LAr_layer = NULL;
+	Xn_LAr_layer = NULL;
+	Yp_LAr_layer = NULL;
+	Yn_LAr_layer = NULL;
+
+	top_cell_container = NULL;
+	top_cell = NULL;
+	top_cell_hole = NULL;
+	top_cell_hole_dielectric = NULL;
+
+	bot_cell_container = NULL;
+	bot_cell = NULL;
+	bot_cell_hole = NULL;
+	bot_cell_hole_dielectric = NULL;
+#ifdef TOP_MESH_TEST
+	top_mesh_test_detector=NULL;
+#else
+	top_mesh_absorber = NULL; //between cell and GEM, absorbs light passed through GEM
+#endif
+	bot_mesh_absorber = NULL;
+	Xp_wls = NULL; //p-plus, n-minus,negative
+	Xn_wls = NULL;
+	Yp_wls = NULL;
+	Yn_wls = NULL;
+
+	Xp_acrylic = NULL;
+	Xn_acrylic = NULL;
+	Yp_acrylic = NULL;
+	Yn_acrylic = NULL;
+
+	 Xp_LAr_gap = NULL;
+	 Xn_LAr_gap = NULL;
+	 Yp_LAr_gap = NULL;
+	 Yn_LAr_gap = NULL;
+	
+	 Xp_PMT = NULL;
+	 Xn_PMT = NULL;
+	 Yp_PMT = NULL;
+	 Yn_PMT = NULL;
+	
+	 envelope = NULL;
+	 world = NULL;
+	 box_interior = NULL;
+	 box = NULL;
 }
 
 B1DetectorConstruction::~B1DetectorConstruction()
@@ -92,9 +143,6 @@ G4double B1DetectorConstruction::GetHitProbability(G4StepPoint* post_point)
 	{
 		if (*j == in_volume)
 		{
-//#ifdef TEMP_CODE_
-//			return 1;
-//#endif
 			if (is_on_boundary)
 			{
 				G4int is_valid = 1;
@@ -103,6 +151,9 @@ G4double B1DetectorConstruction::GetHitProbability(G4StepPoint* post_point)
 					if (theGlobalNormal*Momentum_dir < 0)
 						return -1;
 			}
+#ifdef NO_QE_ //QE=1
+			return 1;
+#endif
 			G4Material* mat_= in_volume->GetMaterial();
 			if (mat_)
 			{
@@ -161,10 +212,6 @@ void B1DetectorConstruction::wavelen_transmittance_to_table
 			else
 				abs_lengths[size - 1 - counter] = DBL_MAX; //no absorbtion
 		}
-#ifdef TEMP_CODE_
-		int b = abs_lengths[size - 1 - counter];
-		int a = b;
-#endif
 	}
 	table->AddProperty("ABSORBTION_LENGTH", energies, abs_lengths, size);
 	delete[] energies;
@@ -321,7 +368,7 @@ G4Material* B1DetectorConstruction::_Argon_mat(void)
 {
 	G4Material* _Argon = new G4Material("Argon",18,39.95*g/mole, 1.784e-3*273/87*g/cm3,kStateGas,87*kelvin,1*atmosphere);
 	G4MaterialPropertiesTable* prop_table = new G4MaterialPropertiesTable();
-	G4double energies[8] = { 2.72 * eV, 2.95 * eV, 3.05*eV, 3.26*eV, 3.46*eV, 3.68*eV, 3.92*eV,9.68*eV};
+	G4double energies[8] = { 2.72 * eV, 2.95 * eV, 3.05*eV, 3.26*eV, 3.46*eV, 3.68*eV, 3.92*eV,9.65*eV};
 	G4double rindexes[8] = { 1.01, 1.01, 1.01, 1.01, 1.01, 1.01, 1.01, 1.01};
 	prop_table->AddProperty("RINDEX", energies, rindexes, 8);
 	gen_integral_en_spec(ARGON_SPECTRUM_FILE, prop_table); //emission parameters, used in CustomRunManger
@@ -338,9 +385,12 @@ G4Material* B1DetectorConstruction::_WLS_mat(void)
 	_WLS->AddElement(el_H, 8);
 	G4MaterialPropertiesTable* prop_table = new G4MaterialPropertiesTable();
 
-	G4double energies[4] = {2.72*eV, 2.95 * eV, 3.68*eV, 9.68 * eV }; //TODO: more data required
+	G4double energies[4] = {2.72*eV, 2.95 * eV, 3.68*eV, 9.65 * eV }; //TODO: more data required
+#ifdef NO_VUV_WLS_FRESNEL
+	G4double rindexes[4] = { 1.62, 1.62, 1.62, 1.01 };
+#else
 	G4double rindexes[4] = { 1.62, 1.62, 1.62, 1.60}; //TODO: figure out n complexity here
-
+#endif
 	prop_table->AddProperty("RINDEX", energies, rindexes, 4);
 
 	G4double wavelen[22] = {340*nm, 350*nm,    360*nm, 362*nm, 366*nm, 369*nm, 372*nm, 375*nm, 378*nm, 381*nm, 384*nm, 387*nm, 390*nm, 
@@ -355,14 +405,41 @@ G4Material* B1DetectorConstruction::_WLS_mat(void)
 #endif
 	wavelen_transmittance_to_table(prop_table, wavelen, transmittance, 22,WLS_FILM_WIDTH);
 
-	G4double emiss_en[8] = { 2.72 * eV, 2.95 * eV, 3.05*eV, 3.26*eV, 3.46*eV, 3.68*eV, 3.92*eV, 9.68*eV };
+	G4double emiss_en[8] = { 2.72 * eV, 2.95 * eV, 3.05*eV, 3.26*eV, 3.46*eV, 3.68*eV, 3.92*eV, 9.65*eV };
+#if defined(UNITY_CE_)
+	G4double emiss_eff[8] = { 1, 1, 1, 1, 1, 1, 1, 1};
+#else
 	G4double emiss_eff[8] = { 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.58};
+#endif
 	//G4double emiss_eff[8] = { 0, 0, 0, 0, 0, 0, 0, 0};
 	prop_table->AddProperty("WLS_EFFICIENCY", emiss_en, emiss_eff, 8);
 
 	gen_integral_en_spec(WLS_SPECTRUM_FILE,prop_table);
 
 	_WLS->SetMaterialPropertiesTable(prop_table);
+#ifdef TEST_WLS_SPECTRA
+	G4double* probs = new G4double[EN_BINS_N_];
+	for (int j = 0; j < EN_BINS_N_; j++)
+		probs[j] = 0;
+	G4MaterialPropertyVector *spec = prop_table->GetProperty("WLS_ENERGY_SPECTRUM");
+	G4double wl_min = 1.2398e3 / (WLS_MAX_EN / eV);
+	G4double wl_max = 1.2398e3 / (WLS_MIN_EN / eV);
+	for (int j = 0; j < 1000000; j++)
+	{
+		G4double en = spec->Value(G4UniformRand());
+		G4double wl = 1.2398e3 / (en / eV);
+		G4int index = (EN_BINS_N_-1)*(wl - wl_min) / (wl_max - wl_min);
+		if ((index < 0) || (index >= EN_BINS_N_))
+			continue;
+		probs[index]++;
+	}
+	std::ofstream file;
+	file.open(TEST_WLS_OUT_SPEC, std::ios_base::trunc);
+	for (int j = 0; j <EN_BINS_N_; j++)
+		file <<(wl_min+ (wl_max-wl_min)*j / (EN_BINS_N_ - 1)) << "\t" << probs[j]<<std::endl;
+	file.close();
+	delete [] probs;
+#endif
 	return _WLS;
 }
 
@@ -370,7 +447,7 @@ G4Material*  B1DetectorConstruction::_Copper_mat(void)
 {
 	G4Material* _Copper = new G4Material("Copper", 29, 63.55*g / mole, 8.96* g / cm3, kStateSolid, 87 * kelvin, 1 * atmosphere);
 	G4MaterialPropertiesTable* prop_table = new G4MaterialPropertiesTable();
-	G4double energies[8] = { 2.72 * eV, 2.95 * eV, 3.05*eV, 3.26*eV, 3.46*eV, 3.68*eV, 3.92*eV, 9.68*eV };
+	G4double energies[8] = { 2.72 * eV, 2.95 * eV, 3.05*eV, 3.26*eV, 3.46*eV, 3.68*eV, 3.92*eV, 9.65*eV };
 	G4double rindexes[8] = { 1, 1, 1, 1, 1, 1, 1, 1}; //its optical properties are set via OpticalSurface
 	prop_table->AddProperty("RINDEX", energies, rindexes, 8);
 	_Copper->SetMaterialPropertiesTable(prop_table);
@@ -436,7 +513,7 @@ G4Material* B1DetectorConstruction::_Acrylic_mat(void)
 	prop_table->AddProperty("RINDEX", energies, rindexes, 6);
 	G4double wavelen[26] = { 320*nm, 336 * nm, 343.8 * nm, 350 * nm, 360 * nm, 363.5 * nm, 366.4 * nm, 367 * nm,
 		371.9 * nm, 373.5 * nm, 376 * nm, 378 * nm, 380 * nm, 382.2*nm, 385.7*nm, 387.3*nm, 390.6*nm, 
-		394.4*nm, 398.6*nm, 403.4*nm, 414.1*nm, 427.6*nm, 444 * nm, 475.3*nm, 501.1*nm, 229.8*nm};
+		394.4*nm, 398.6*nm, 403.4*nm, 414.1*nm, 427.6*nm, 444 * nm, 475.3*nm, 501.1*nm, 529.8*nm};
 	G4double transmittance[26] = {5e-6, 1e-4, 0.015,0.023,0.067, 0.115,0.182,0.270, 0.356, 0.417, 0.5,0.586, 0.652,
 		0.717, 0.782, 0.829, 0.857, 0.874, 0.886,0.892,0.894,0.897,0.9,0.902,0.905,0.908};
 #ifdef FIX_TRANSMITTANCE_
@@ -457,8 +534,12 @@ G4Material* B1DetectorConstruction::_LArgon_mat(void)
 {
 	G4Material* _Argon = new G4Material("Liquid Argon", 18, 39.95*g / mole, 1.4* g / cm3, kStateLiquid, 87 * kelvin, 1 * atmosphere);
 	G4MaterialPropertiesTable* prop_table = new G4MaterialPropertiesTable();
-	G4double energies[10] = { 2.95 * eV, 3.2*eV, 3.4*eV, 3.8*eV, 4*eV, 5.63*eV, 6.89*eV, 7.75*eV, 8.86*eV, 9.68*eV };
+	G4double energies[10] = { 2.95 * eV, 3.2*eV, 3.4*eV, 3.8*eV, 4*eV, 5.63*eV, 6.89*eV, 7.75*eV, 8.86*eV, 9.65*eV };
+#ifdef NO_VUV_WLS_FRESNEL
+	G4double rindexes[10] = { 1.23, 1.23, 1.23, 1.23, 1.23, 1.26, 1.29, 1.31, 1.34, 1.01 };
+#else
 	G4double rindexes[10] = { 1.23,		 1.23,	 1.23,	 1.23,	 1.23, 1.26,	1.29,	 1.31,	  1.34,    1.38 };
+#endif
 	/*n===+0.03 of Neumeier, "Optical Properties of Liquid Noble
 	Gas Scintillators" - corrected for logbook data*/
 	prop_table->AddProperty("RINDEX", energies, rindexes, 10);
@@ -587,14 +668,15 @@ G4VPhysicalVolume* B1DetectorConstruction::Construct()
   Xn_LAr_layer = new G4LogicalVolume(solid_x_LAr_layer, LAr_mat, "XnLArLayer");
   Yp_LAr_layer = new G4LogicalVolume(solid_y_LAr_layer, LAr_mat, "YpLArLayer");
   Yn_LAr_layer = new G4LogicalVolume(solid_y_LAr_layer, LAr_mat, "YnLArLayer");
+
   new G4PVPlacement(0, G4ThreeVector(0.5*(GEM_SIZE_TOTAL + LAr_width)*mm, -0.5*LAr_width*mm, (-18 - (4 + plate_W) / 2 + (18 + 4) / 2)*mm),
 	  Xp_LAr_layer,"XpLArLayer",box_interior,false,0,checkOverlaps);
-  new G4PVPlacement(0, G4ThreeVector(-0.5*(GEM_SIZE_TOTAL + LAr_width)*mm, +0.5*LAr_width*mm, (-18 - (4 + plate_W) / 2 + (18 + 4) / 2)*mm),
-	  Xn_LAr_layer,"XnLArLayer",box_interior,false,0,checkOverlaps);
   new G4PVPlacement(0, G4ThreeVector(+0.5*LAr_width*mm, 0.5*(GEM_SIZE_TOTAL + LAr_width)*mm, (-18 - (4 + plate_W) / 2 + (18 + 4) / 2)*mm),
 	  Yp_LAr_layer, "YpLArLayer", box_interior, false, 0, checkOverlaps);
   new G4PVPlacement(0, G4ThreeVector(-0.5*LAr_width*mm, -0.5*(GEM_SIZE_TOTAL + LAr_width)*mm, (-18 - (4 + plate_W) / 2 + (18 + 4) / 2)*mm),
 	  Yn_LAr_layer, "YnLArLayer", box_interior, false, 0, checkOverlaps);
+  new G4PVPlacement(0, G4ThreeVector(-0.5*(GEM_SIZE_TOTAL + LAr_width)*mm, +0.5*LAr_width*mm, (-18 - (4 + plate_W) / 2 + (18 + 4) / 2)*mm),
+	  Xn_LAr_layer, "XnLArLayer", box_interior, false, 0, checkOverlaps);
 #ifndef TOP_MESH_TEST
   G4VPhysicalVolume* phys_top_CU = new G4PVPlacement(0, G4ThreeVector(0, 0, 0), top_cu_plate, //placed in above pseudo volumes
 	  "TopCU", top_ps_plate, false, 0, checkOverlaps);
@@ -709,7 +791,9 @@ G4VPhysicalVolume* B1DetectorConstruction::Construct()
   G4Box* solid_y_LArGap = new G4Box("y_LArGap", 0.5*(141 * mm + 2 * (WLS_FILM_WIDTH + PMMA_WIDTH) + 2 * mm), 0.5*(2 * mm), 0.5 *(4 + 0.5 + 20)*mm);
   G4Box* solid_x_LArGap = new G4Box("x_LArGap", 0.5*(2 * mm), 0.5*(141 * mm + 2 * (WLS_FILM_WIDTH + PMMA_WIDTH) + 2 * mm), 0.5 *(4 + 0.5 + 20)*mm);
 
+#if !defined(NO_Xp_WLS)
   Xp_wls = new G4LogicalVolume(solid_x_WLS, WLS_mat, "X_PositiveWLS");
+#endif
   Xn_wls = new G4LogicalVolume(solid_x_WLS, WLS_mat, "X_NegativeWLS");
   Yp_wls = new G4LogicalVolume(solid_y_WLS, WLS_mat, "Y_PositiveWLS");
   Yn_wls = new G4LogicalVolume(solid_y_WLS, WLS_mat, "Y_NegativeWLS");
@@ -722,8 +806,15 @@ G4VPhysicalVolume* B1DetectorConstruction::Construct()
   Yp_LAr_gap = new G4LogicalVolume(solid_y_LArGap, LAr_mat, "Y_PositiveLArGap");
   Yn_LAr_gap = new G4LogicalVolume(solid_y_LArGap, LAr_mat, "Y_NegativeLArGap");
 
+#if !defined(NO_Xp_WLS)
   G4VPhysicalVolume* phys_Xp_WLS = new G4PVPlacement(0, G4ThreeVector(+0.5*(141*mm+WLS_FILM_WIDTH), -0.5*(WLS_FILM_WIDTH), 0),
 	  Xp_wls, "X_PositiveWLS", box, false, 0, checkOverlaps);
+#else
+  G4Box* solid_x_WLS_LAr = new G4Box("x_WLS_LAr", 0.5*(WLS_FILM_WIDTH), 0.5*(141 * mm + WLS_FILM_WIDTH), 0.5*(4 + plate_W + 20)*mm);
+  Xp_wls = new G4LogicalVolume(solid_x_WLS_LAr, LAr_mat, "X_PositiveWlsLAr");
+  G4VPhysicalVolume* phys_Xp_WLS = new G4PVPlacement(0, G4ThreeVector(+0.5*(141 * mm + WLS_FILM_WIDTH), -0.5*(WLS_FILM_WIDTH), -((11 - 4) + 0.5*(4 + plate_W + 20))*mm),
+	  Xp_wls, "X_PositiveWLS", box, false, 0, checkOverlaps);
+#endif
   G4VPhysicalVolume* phys_Xn_WLS = new G4PVPlacement(0, G4ThreeVector(-0.5*(141 * mm + WLS_FILM_WIDTH), +0.5*(WLS_FILM_WIDTH), 0),
 	  Xn_wls, "X_NegativeWLS", box, false, 0, checkOverlaps);
   G4VPhysicalVolume* phys_Yp_WLS = new G4PVPlacement(0, G4ThreeVector(+0.5*(WLS_FILM_WIDTH), +0.5*(141 * mm + WLS_FILM_WIDTH), 0),
@@ -900,9 +991,15 @@ void B1DetectorConstruction :: _SetVisibilityParameters(void)
 	bot_LAr_layer->SetVisAttributes(temp);
 	//======LAr
 	//======WSL
+#if !defined(NO_Xp_WLS)
 	temp = new G4VisAttributes(G4Color(0.15, 0.6, 0.15));
 	temp->SetVisibility(true);
 	Xp_wls->SetVisAttributes(temp);
+#else
+	temp = new G4VisAttributes(G4Color(_light_blue_RGB, 0.3));
+	temp->SetVisibility(true);
+	Xp_wls->SetVisAttributes(temp);
+#endif
 	temp = new G4VisAttributes(G4Color(0.15, 0.6, 0.15));
 	temp->SetVisibility(true);
 	Xn_wls->SetVisAttributes(temp);

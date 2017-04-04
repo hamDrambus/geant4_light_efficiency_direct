@@ -1,17 +1,222 @@
 #include "CustomRunManager.hh"
 #include "G4UImanager.hh"
 
+event_history::event_history()
+{
+	clear();
+	weight = 0;
+	for (int Y = 0; Y < 4; Y++)
+	{
+		tot_probability[Y] = 0;
+		neighbours_prob[Y] = 0;
+		opposite_prob[Y]= 0;
+		neighbours_not_refl_prob[Y] = 0;
+		opposite_not_refl_prob[Y] = 0;
+		same_prob[Y] = 0;
+	}
+}
+
+void event_history::clear(void)
+{
+	is_reemissed=false;
+	wls_origin_number=-1; //0 x+, 1 y+, 2 x-, 3 y-
+	detection_number=-1;	//--||--
+	bot_cu_refl_num=0;
+	top_cu_refl_num=0;
+//#ifdef TEMP_CODE_ //for gammas from WLS study
+//	wls_origin_number=0;
+//	is_reemissed = true;
+//#endif
+	one_run_hits.erase(one_run_hits.begin(), one_run_hits.end());
+}
+
+void event_history::SetHit(G4int is_hit, G4double prob,const G4Step* step)
+{
+	if ((prob < 0) || (is_hit < 0))
+		return;
+	one_run_hits.push_back(is_hit*prob);
+}
+
+void event_history::SteppingProc(const G4Step* step)//sets gamma 'tags'
+{
+	CustomRunManager* manman = (CustomRunManager*)(G4RunManager::GetRunManager());
+	B1DetectorConstruction *det = (B1DetectorConstruction *)manman->GetUserDetectorConstruction();
+	G4LogicalVolume* postV = step->GetPostStepPoint()->GetTouchableHandle()->GetVolume()->GetLogicalVolume();
+	G4LogicalVolume* preV = step->GetPreStepPoint()->GetTouchableHandle()->GetVolume()->GetLogicalVolume();
+	if ((0!= step->GetSecondary()->size()) && ((preV == det->Xp_wls) || (preV == det->Xn_wls) || (preV == det->Yp_wls) || (preV == det->Yn_wls)))
+	{
+		if (preV == det->Xp_wls)
+			wls_origin_number = 0;
+		if (preV == det->Yp_wls)
+			wls_origin_number = 1;
+		if (preV == det->Xn_wls)
+			wls_origin_number = 2;
+		if (preV == det->Yn_wls)
+			wls_origin_number = 3;
+		is_reemissed = true;
+	}
+	if (!(0>det->GetHitProbability(step->GetPostStepPoint())))
+	{
+		if (postV == det->Xp_PMT)
+			detection_number = 0;
+		if (postV == det->Yp_PMT)
+			detection_number = 1;
+		if (postV == det->Xn_PMT)
+			detection_number = 2;
+		if (postV == det->Yn_PMT)
+			detection_number = 3;
+	}
+	if ((postV == det->top_GEM->parent)||(postV==det->top_cu_plate))
+		top_cu_refl_num++;
+	if ((postV == det->bot_GEM->parent) || (postV == det->bot_cu_plate))
+		bot_cu_refl_num++;
+}
+
+void event_history::RunEnd()
+{
+	G4double hit_probab = one_run_hits.empty() ? -1 : 0;
+	for (auto j = one_run_hits.begin(); j != one_run_hits.end(); j++)
+		hit_probab += *j;
+	hit_probab = hit_probab > 1 ? 1 : hit_probab;
+	if (hit_probab < 0)
+	{
+		clear();
+		return;
+	}
+	for (int p = 0; p < 4; p++)
+		tot_probability[p] = (tot_probability[p]*weight + (p==detection_number? hit_probab :0)) / (weight + 1);
+	weight++;
+	hit_probab = one_run_hits.back();
+	G4double ne_pb = 0;
+	G4double op_pb = 0;
+	G4double ne_nr_pb = 0;
+	G4double op_nr_pb = 0;
+	G4double sm_pb = 0;
+	if (hit_probab < 0)
+		goto Out;
+	if (is_reemissed)
+	{
+		if (wls_origin_number == detection_number)
+		{
+			sm_pb = hit_probab;
+			goto Out;
+		}
+		G4int num1 = wls_origin_number;
+		num1++;
+		num1 = num1 > 3 ? num1 - 4 : num1;
+		G4int num2= wls_origin_number;
+		num2--;
+		num2 = num2 <0  ? num2 + 4 : num2;
+		if ((num1 == detection_number) || (num2 == detection_number))
+		{
+			ne_pb = hit_probab;
+			if ((top_cu_refl_num == 0) && (bot_cu_refl_num == 0))
+				ne_nr_pb = hit_probab;
+			goto Out;
+		}
+		num1 = wls_origin_number + 2;
+		num1 = num1 > 3 ? num1 - 4 : num1;
+		if (num1 == detection_number)
+		{
+			op_pb = hit_probab;
+			if ((top_cu_refl_num == 0) && (bot_cu_refl_num == 0))
+				op_nr_pb = hit_probab;
+		}
+	}
+Out:
+	for (int p = 0; p < 4; p++)
+	{
+		neighbours_prob[p] = (neighbours_prob[p] * (weight - 1) + (detection_number == p ? ne_pb : 0)) / weight;
+		opposite_prob[p] = (opposite_prob[p] * (weight - 1) + (detection_number == p ? op_pb : 0)) / weight;
+		neighbours_not_refl_prob[p] = (neighbours_not_refl_prob[p] * (weight - 1) + (detection_number == p ? ne_nr_pb : 0)) / weight;
+		opposite_not_refl_prob[p] = (opposite_not_refl_prob[p] * (weight - 1) + (detection_number == p ? op_nr_pb : 0)) / weight;
+		same_prob[p] = (same_prob[p] * (weight - 1) + (detection_number == p ? sm_pb : 0)) / weight;
+	}
+	clear();
+}
+
+std::ostream& operator<<(std::ostream& str, const event_history& data)
+{
+	str << G4endl;
+	str << "____event_history____" << G4endl;
+	str << "Number of events: " << data.weight << G4endl;
+	G4double tot_pb = 0, neib_pb = 0, opp_pb = 0, same_pb = 0, nr_neib_pb = 0, nr_opp_pb = 0;
+	for (int p = 0; p < 4; p++)
+	{
+		tot_pb += data.tot_probability[p];
+		neib_pb += data.neighbours_prob[p];
+		opp_pb += data.opposite_prob[p];
+		same_pb += data.same_prob[p];
+		nr_neib_pb += data.neighbours_not_refl_prob[p];
+		nr_opp_pb += data.opposite_not_refl_prob[p];
+	}
+	str << "Total probability: " << tot_pb<< G4endl;
+	str << "To neighbour PMTs probability: " << neib_pb << G4endl;
+	str << "To opposite PMT prob: " << opp_pb << G4endl;
+	str << "To the same PMT prob: " << same_pb << G4endl;
+	str << "No Cu reflection to neighbour PMTs probab: " << nr_neib_pb << G4endl;
+	str << "No Cu reflection to opposite PMT probab: " << nr_opp_pb << G4endl;
+	str << "----------------------------" << G4endl;
+	str << G4endl;
+	str << "X_Positive probabilities:" << G4endl;
+	str << "Total probability: " << data.tot_probability[0]<< G4endl;
+	str << "To neighbour PMTs probability: " << data.neighbours_prob[0]<< G4endl;
+	str << "To opposite PMT prob: " << data.opposite_prob[0]<< G4endl;
+	str << "To the same PMT prob: " << data.same_prob[0]<< G4endl;
+	str << "No Cu reflection to neighbour PMTs probab: " << data.neighbours_not_refl_prob[0] << G4endl;
+	str << "No Cu reflection to opposite PMT probab: " << data.opposite_not_refl_prob[0] << G4endl;
+	str << G4endl;
+	str << "----------------------------" << G4endl;
+	str << "Y_Positive probabilities:" << G4endl;
+	str << "Total probability: " << data.tot_probability[1] << G4endl;
+	str << "To neighbour PMTs probability: " << data.neighbours_prob[1] << G4endl;
+	str << "To opposite PMT prob: " << data.opposite_prob[1] << G4endl;
+	str << "To the same PMT prob: " << data.same_prob[1] << G4endl;
+	str << "No Cu reflection to neighbour PMTs probab: " << data.neighbours_not_refl_prob[1] << G4endl;
+	str << "No Cu reflection to opposite PMT probab: " << data.opposite_not_refl_prob[1] << G4endl;
+	str << G4endl;
+	str << "----------------------------" << G4endl;
+	str << "X_Negative probabilities:" << G4endl;
+	str << "Total probability: " << data.tot_probability[2] << G4endl;
+	str << "To neighbour PMTs probability: " << data.neighbours_prob[2] << G4endl;
+	str << "To opposite PMT prob: " << data.opposite_prob[2] << G4endl;
+	str << "To the same PMT prob: " << data.same_prob[2] << G4endl;
+	str << "No Cu reflection to neighbour PMTs probab: " << data.neighbours_not_refl_prob[2] << G4endl;
+	str << "No Cu reflection to opposite PMT probab: " << data.opposite_not_refl_prob[2] << G4endl;
+	str << G4endl;
+	str << "----------------------------" << G4endl;
+	str << "Y_Negative probabilities:" << G4endl;
+	str << "Total probability: " << data.tot_probability[3] << G4endl;
+	str << "To neighbour PMTs probability: " << data.neighbours_prob[3] << G4endl;
+	str << "To opposite PMT prob: " << data.opposite_prob[3] << G4endl;
+	str << "To the same PMT prob: " << data.same_prob[3] << G4endl;
+	str << "No Cu reflection to neighbour PMTs probab: " << data.neighbours_not_refl_prob[3] << G4endl;
+	str << "No Cu reflection to opposite PMT probab: " << data.opposite_not_refl_prob[3] << G4endl;
+	str << G4endl;
+	return str;
+}
+
 CustomRunManager::~CustomRunManager()
 {
 	//if (primary_Monte_Carlo) delete primary_Monte_Carlo;
 	if (curr_mapping_state) delete curr_mapping_state;
 	if (sim_results) delete sim_results;
+	if (ev_history) delete ev_history;
 };
 
 void CustomRunManager::ProcessOneEvent(G4int i_event)
 {
 	OnEventStartProc();
 	G4RunManager::ProcessOneEvent(i_event);
+}
+
+void CustomRunManager::TerminateOneEvent()
+{
+	if (sim_results)
+		sim_results->RunEnd();
+	if (ev_history)
+		ev_history->RunEnd();
+	G4RunManager::TerminateOneEvent();
 }
 
 void CustomRunManager::DoEventLoop(G4int n_event,const char* macroFile,G4int n_select)
@@ -22,7 +227,6 @@ void CustomRunManager::DoEventLoop(G4int n_event,const char* macroFile,G4int n_s
   G4int counter = 0;
   for(G4int i_event=0; i_event<n_event; i_event++ )
   {
-	G4int were_secondaries = 0;
     ProcessOneEvent(i_event);
 	if (interval*counter <= i_event)
 	{
@@ -36,10 +240,12 @@ void CustomRunManager::DoEventLoop(G4int n_event,const char* macroFile,G4int n_s
   TerminateEventLoop();
 }
 
-void CustomRunManager::SetHit(G4int is_hit, G4double probab)
+void CustomRunManager::SetHit(G4int is_hit, G4double probab,const G4Step* step)
 {
 	if (sim_results)
-		sim_results->SetHit(is_hit, probab);
+		sim_results->SetHit(is_hit, probab,step);
+	if (ev_history)
+		ev_history->SetHit(is_hit, probab,step);
 }
 
 //0 - kill process, 1 - select reflection, 2 - select defraction, 3 - select both
@@ -53,17 +259,17 @@ G4int CustomRunManager::select_photon_BP(const G4Step* step, G4ThreeVector defl_
 		= static_cast<const B1DetectorConstruction*> (this->GetUserDetectorConstruction());
 	G4LogicalVolume* pre_volume=step->GetPreStepPoint()->GetTouchableHandle()->GetVolume()->GetLogicalVolume();
 	G4LogicalVolume* post_volume = step->GetPostStepPoint()->GetTouchableHandle()->GetVolume()->GetLogicalVolume();
-	if ((post_volume == detC->Xn_PMT) || (post_volume == detC->Xp_PMT) || (post_volume == detC->Yn_PMT) || (post_volume == detC->Yp_PMT))
-		return RM_CHOOSE_DEFL; //TODO: should be both?
-#if defined(TOP_MESH_TEST)||defined(TEST_MESH_SIDEWAYS)
-	if (((pre_volume == detC->top_cell_hole) || (pre_volume == detC->top_cell_container) || (pre_volume == detC->top_cell_hole_dielectric)))
-	{
-		return RM_CHOOSE_BOTH;
-	}
-#else
+	//if ((post_volume == detC->Xn_PMT) || (post_volume == detC->Xp_PMT) || (post_volume == detC->Yn_PMT) || (post_volume == detC->Yp_PMT))
+	//	return RM_CHOOSE_DEFL; //TODO: should be both?
+//#if defined(TOP_MESH_TEST)||defined(TEST_MESH_SIDEWAYS)
+//	if (((pre_volume == detC->top_cell_hole) || (pre_volume == detC->top_cell_container) || (pre_volume == detC->top_cell_hole_dielectric)))
+//	{
+//		return RM_CHOOSE_BOTH;
+//	}
+//#else
 	//6 unreachable volumes (absorbe light, but for speed increase are also here):
 	//TODO: figure out dielectic's (g10's) properties
-	if (((post_volume == detC->bot_cu_plate) || (post_volume == detC->top_cu_plate)) && (pre_volume!=post_volume))
+	/*if (((post_volume == detC->bot_cu_plate) || (post_volume == detC->top_cu_plate)) && (pre_volume!=post_volume))
 			return RM_CHOOSE_REFL;
 	if ((post_volume == detC->top_cell) && (post_volume!=pre_volume))
 		return RM_CHOOSE_REFL;
@@ -73,18 +279,16 @@ G4int CustomRunManager::select_photon_BP(const G4Step* step, G4ThreeVector defl_
 	if ((post_volume == detC->bot_cell) && (post_volume != pre_volume))
 		return RM_CHOOSE_REFL;
 	if ((post_volume == detC->bot_cell_hole_dielectric) && (post_volume != pre_volume))
-		return RM_CHOOSE_REFL;
+		return RM_CHOOSE_REFL;*/
 	//no rules for holes, containers and pseudoplates, because by geometry defs they all have the same refractive index
 	if (((pre_volume == detC->Xn_wls) || (pre_volume == detC->Xp_wls) || (pre_volume == detC->Yn_wls) || (pre_volume == detC->Yp_wls))
 		&& ((post_volume == detC->box_interior) || (post_volume == detC->LAr_layer) || (post_volume == detC->box) ||
 		(post_volume == detC->bot_ps_plate) || (post_volume == detC->top_ps_plate)))
-		return RM_CHOOSE_REFL;
+		return 0;
 	//^the last condition means that photons, leaving wls and heading inside are supreessed
 	//^TODO: this probably should be done by adding absorbtion inside the argon
-//#ifdef TEMP_CODE_
-//	return RM_CHOOSE_DEFL;
-//#endif
-	return RM_CHOOSE_BOTH; //TODO: W! too much treeing
+
+	return 1;
 }
 
 G4ThreeVector CustomRunManager::FetchPosition()
@@ -119,7 +323,9 @@ G4ThreeVector CustomRunManager::GenPosition()
 #ifdef AR_SPEC_TEST
 	return initial_position = G4ThreeVector(0, -0.45*sqrt(3)/2, 10.9);
 #endif
-	//return initial_position = G4ThreeVector(0, ((141.0/2)+(WLS_FILM_WIDTH/2))*mm, 0);
+//#ifdef TEMP_CODE_
+//	return initial_position = G4ThreeVector((141+WLS_FILM_WIDTH)/2, 0, 0);
+//#endif
 	G4double phi = 2*CLHEP::pi*G4UniformRand();
 	G4double D = CONVERSION_DIAM > GEM_SIZE_TOTAL ? GEM_SIZE_TOTAL : CONVERSION_DIAM;
 	G4double r = 0.5*D*sqrt(G4UniformRand());

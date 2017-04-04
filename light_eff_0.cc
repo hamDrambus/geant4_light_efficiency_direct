@@ -29,7 +29,7 @@ int main(int argc,char** argv)
 {
   // Choose the Random engine
   //
-  G4Random::setTheEngine(new CLHEP::RanecuEngine(40));
+  G4Random::setTheEngine(new CLHEP::RanecuEngine(41));
   
   // Construct the default run manager
   //
@@ -55,14 +55,87 @@ int main(int argc,char** argv)
   //
   runManager->Initialize();
   //runManager->BeamOn(runManager->x_num*runManager->y_num);
-  
+#ifdef AVERAGE_QE_
+  std::list<G4double> wavelengths;
+  std::list<G4double> probs;
+  G4double min_wl, max_wl;
+  std::ifstream fl(WLS_SPECTRUM_FILE);
+  while (!fl.eof())
+  {
+	  G4double x, y;
+	  fl >> x;
+	  if (fl.eof())
+		  break;
+	  fl >> y;
+	  wavelengths.push_back(x);
+	  probs.push_back(y);
+}
+  fl.close();
+  min_wl = wavelengths.front(); //sorted input assumed
+  max_wl = wavelengths.back();
+  G4double* temp_wavelengths = new G4double[wavelengths.size()];
+  G4double* temp_weights = new G4double[wavelengths.size()];
+  int fgg = 0;
+  auto j = probs.begin();
+  for (auto u = wavelengths.begin(); u != wavelengths.end(); fgg++, j++, u++)
+  {
+	  temp_wavelengths[fgg] = *u;
+	  temp_weights[fgg] = *j;
+  }
+  G4MaterialPropertyVector wls_file_vals = G4MaterialPropertyVector(temp_wavelengths, temp_weights, wavelengths.size());
+  delete[] temp_wavelengths;
+  delete[] temp_weights;
+  wavelengths.erase(wavelengths.begin(),wavelengths.end());
+  probs.erase(probs.begin(), probs.end());
+  //-----------------------
+  fl.open(PMT_QE_FILE);
+  while (!fl.eof())
+  {
+	  G4double x, y;
+	  fl >> x;
+	  if (fl.eof())
+		  break;
+	  fl >> y;
+	  wavelengths.push_back(x);
+	  probs.push_back(y);
+  }
+  fl.close();
+  temp_wavelengths = new G4double[wavelengths.size()];
+  temp_weights = new G4double[wavelengths.size()];
+  fgg = 0;
+  auto s = probs.begin();
+  for (auto u = wavelengths.begin(); u != wavelengths.end(); fgg++, s++, u++)
+  {
+	  temp_wavelengths[fgg] = *u;
+	  temp_weights[fgg] = *s;
+  }
+  G4MaterialPropertyVector qe_file_vals = G4MaterialPropertyVector(temp_wavelengths, temp_weights, wavelengths.size());
+  delete[] temp_wavelengths;
+  delete[] temp_weights;
+  wavelengths.erase(wavelengths.begin(), wavelengths.end());
+  probs.erase(probs.begin(), probs.end());
+
+  G4double integral_wls = 0, convolution=0;
+  for (int h = 0; h < 10000; h++)
+  {
+	  G4double wl = min_wl + (max_wl - min_wl)*h / (10000 - 1);
+	  G4double qe = qe_file_vals.Value(wl);
+	  G4double w_wl = wls_file_vals.Value(wl);
+	  integral_wls += w_wl;
+	  convolution += w_wl*qe;
+  }
+  G4cout << "Average QE: " << convolution/integral_wls<< G4endl;
+#endif
   time_t timer_start, timer_end;
   time(&timer_start);
-
+#if !defined(SPATIAL_ANGLE_)
 #ifdef AR_SPEC_TEST
 	  runManager->BeamOn(700000);
 #else
   runManager->BeamOn(50000000);
+#endif
+#else
+  runManager->BeamOn(5000000);
 #endif
   //DONE: TODO: check reemiss/noreemiss code
   //G4double pb_total, pb_no_reemiss, pb_reemissed;
@@ -70,15 +143,18 @@ int main(int argc,char** argv)
   time(&timer_end);
   G4double seconds = difftime(timer_end, timer_start);
   G4cout<<*(runManager->sim_results);
+  G4cout << *(runManager->ev_history);
   //DONE - no, no problem: TODO figure out: messed up with the names for some reason
   //G4cout << "total events proceded: " << (runManager->sim_results->Num_of_events())+(runManager->extra_run_id) << G4endl;
   G4cout << "Time elapsed: "<< ((int)seconds/3600)<<"h "<<((int)seconds % 3600)/60<<"m "<<(int)seconds % 60<<"s"<<G4endl;
+#if !defined(SPATIAL_ANGLE_)
 #ifdef AR_SPEC_TEST
   runManager->get_detected_spectrum();
 #endif
 #ifdef TOP_MESH_TEST
   runManager->export_to_bmp(&runManager->top_hits_xs, &runManager->top_hits_ys, &runManager->top_hits_probs, "top_mesh_test.bmp");
   runManager->export_to_bmp(&runManager->bot_hits_xs, &runManager->bot_hits_ys, &runManager->bot_hits_probs, "bot_mesh_test.bmp");
+#endif
 #endif
   Beep(1500, 300);
   Sleep(150);
@@ -124,5 +200,3 @@ int main(int argc,char** argv)
 
   return 0;
 }
-
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo.....

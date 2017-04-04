@@ -27,14 +27,22 @@ void B1SteppingAction::UserSteppingAction(const G4Step* step)
 	if (NULL==tremor)
 	{// kind of error
 		CustomRunManager* manman = (CustomRunManager*)(G4RunManager::GetRunManager());
-		manman->SetHit(-1);  //was manman->SetHit(0);
+		manman->SetHit(-1,1,step);  //was manman->SetHit(0);
 		//step->GetTrack()->SetTrackStatus(fStopAndKill);
 		//manman->next_event(step);
 		return;
 	}
   G4LogicalVolume* post_log_volume = tremor->GetLogicalVolume();
   CustomRunManager* manman = (CustomRunManager*)(G4RunManager::GetRunManager());
-  if (step->GetTrack()->GetTrackStatus() == fStopAndKill) //in case some process killed the track, I need to handle events properly
+#ifdef NO_BACK_SCATTERING
+  if (!manman->select_photon_BP(step, G4ThreeVector(0, 0, 0), G4ThreeVector(0, 0, 0)))
+  {
+	  step->GetTrack()->SetTrackStatus(fStopAndKill); //kills if photon goes inside interior volume
+  }
+#endif
+  if (manman->ev_history)
+	  manman->ev_history->SteppingProc(step);
+  if (step->GetTrack()->GetTrackStatus() == fStopAndKill) //TODO: in case some process killed the track, I need to handle events properly
   {
 	  manman->SetHit(0);
 	  /*manman->next_event(step);*/
@@ -43,7 +51,7 @@ void B1SteppingAction::UserSteppingAction(const G4Step* step)
   if (manman->is_internal_reflection&&manman->is_no_absorbtion)
   {
 	  step->GetTrack()->SetTrackStatus(fStopAndKill);
-	  manman->SetHit(0);
+	  manman->SetHit(0,1,step);
 	  manman->is_internal_reflection = 0;
 	  manman->is_no_absorbtion = 0;
 	  return;
@@ -52,7 +60,7 @@ void B1SteppingAction::UserSteppingAction(const G4Step* step)
   manman->is_no_absorbtion = 0;
   if (step->GetTrack()->GetTrackStatus() == fKillTrackAndSecondaries) //in case some process fails
   {
-	  manman->SetHit(-1);
+	  manman->SetHit(-1,1,step);
 	  return;
   }
   //if (manman->get_curr_event_probab()< MIN_ALLOWED_STEPPING)
@@ -67,14 +75,14 @@ void B1SteppingAction::UserSteppingAction(const G4Step* step)
   G4double detect_prob = detectorConstruction->GetHitProbability(step->GetPostStepPoint());
   if (0 == detect_prob)
   {
-	  manman->SetHit(0);
+	  manman->SetHit(0,1,step);
 	  step->GetTrack()->SetTrackStatus(fStopAndKill);
 	  //manman->next_event(step);
 	  return;
   }
   if (1 == detect_prob)
   {
-	  manman->SetHit(1);
+	  manman->SetHit(1,1,step);
 	  step->GetTrack()->SetTrackStatus(fStopAndKill);
 #ifdef TOP_MESH_TEST
 	  if (step->GetPostStepPoint()->GetTouchableHandle()->GetVolume()->GetLogicalVolume() == detectorConstruction->top_mesh_test_detector)
@@ -101,7 +109,7 @@ void B1SteppingAction::UserSteppingAction(const G4Step* step)
   //manman->SetPhEvType(RM_PHOTON_DETECTION);
   //manman->process_end(step);
   //after "detection process" hit as usual
-  manman->SetHit(1, detect_prob);
+  manman->SetHit(1, detect_prob,step);
   step->GetTrack()->SetTrackStatus(fStopAndKill);
   //manman->next_event(step);
 }

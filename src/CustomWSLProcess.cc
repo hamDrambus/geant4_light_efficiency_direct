@@ -120,10 +120,10 @@ CustomWLSProcess::PostStepDoIt(const G4Track& aTrack, const G4Step& aStep)
 		}
 		else
 		{
-//#ifdef TEMP_CODE_
-//			aParticleChange.SetNumberOfSecondaries(0);
-//			return &aParticleChange;
-//#endif
+#ifdef ZERO_CE_
+			aParticleChange.SetNumberOfSecondaries(0);
+			return &aParticleChange;
+#endif
 			aParticleChange.SetNumberOfSecondaries(1);
 			G4MaterialPropertyVector* energy_spec = aMaterialPropertiesTable->GetProperty("WLS_ENERGY_SPECTRUM");
 			G4double energy = energy_spec ? energy_spec->Value(G4UniformRand()) : aStep.GetPostStepPoint()->GetTotalEnergy();
