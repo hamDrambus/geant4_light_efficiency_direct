@@ -43,7 +43,7 @@ void PseudoMesh::hex_indices_by_pos(PseudoMeshData *data, G4double x, G4double y
 	for_out:
 	if (found)
 	{
-		//Fix: when y_index is even x must be _less_ than iXmax, not grater (see picture)
+		//Fix: when y_index is even x must be _less_ than iXmax, not greater (see picture)
 		//hence condition x_index>max_x_index to x_index >(x_max_index-((y_index%2)?0:1)) here and everywhere
 		if ((index_x <= 0) || (index_y <= 0) || (index_x>(iX_max-((index_y%2)?0:1))) || (index_y > iY_max))
 			return;

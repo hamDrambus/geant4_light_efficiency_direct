@@ -12,33 +12,6 @@
 class PseudoMeshData;
 class SimulationSummary;
 
-class event_history
-{
-public:
-	G4bool is_reemissed;
-	G4int wls_origin_number; //0 x+, 1 y+, 2 x-, 3 y-
-	G4int detection_number;	//--||--
-	G4int bot_cu_refl_num;
-	G4int top_cu_refl_num;
-
-	G4int weight;
-	G4double tot_probability[4];
-	G4double neighbours_prob[4];
-	G4double opposite_prob[4];
-	G4double same_prob[4];
-	G4double neighbours_not_refl_prob[4];
-	G4double opposite_not_refl_prob[4];
-	
-	std::list<G4double> one_run_hits;//typically contains one or two elements
-	event_history();
-	void SetHit(G4int is_hit, G4double prob,const G4Step* step);
-	void SteppingProc(const G4Step* step);//sets gamma 'tags'
-	void RunEnd();
-	friend  std::ostream& operator<<(std::ostream& str, const event_history& data);
-protected:
-	void clear(void);
-};
-
 //TODO: this class is becoming too complex and complicated thus is should be split
 //Current mandates:
 //	0) photon with statistical weights (probabilities) managment
@@ -80,7 +53,6 @@ public:
 	//mapping state of MC_Node
 	
 	SimulationSummary* sim_results;
-	event_history* ev_history;
 	G4int is_internal_reflection;//set in optaical process
 	G4int is_no_absorbtion;//set in wls process
 	//^to supress locked photons
@@ -125,26 +97,7 @@ public:
 	void SetHit(G4int is_hit=1, G4double probab=1.0,const G4Step* step=NULL);//now called from UserSteping action only
 	//G4double get_total_detetion_eff(void);
 	/*void get_total_detetion_eff(G4double* no_reemiss, G4double *reemissed, G4double* total);*/
-	CustomRunManager() :G4RunManager() 
-	{
-		curr_mapping_state = new PseudoMeshData;
-		sim_results = new SimulationSummary;
-		ev_history = new event_history;
-#ifdef AR_EMISSION_NITRO
-		EnergySpectrum=NULL;
-#endif
-		is_internal_reflection=0;
-		is_no_absorbtion=0;
-#ifdef TOP_MESH_TEST
-		x_num = 600;
-		y_num = 450;
-		x_start = 8 * mm / 2;
-		y_start = 0 * mm / 2;
-		t_step = 0.1*mm;
-		t_uncert = 0.05*mm;
-		t_counter = 0;
-#endif
-	};
+	CustomRunManager(void);
 	~CustomRunManager();
 	
     virtual void DoEventLoop(G4int n_event,const char* macroFile=0,G4int n_select=-1);

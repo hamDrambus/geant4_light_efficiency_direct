@@ -1,6 +1,21 @@
 #ifndef global_definitions_hh
 #define global_definitions_hh
 
+//05.10.2017: reread the PropEL paper,
+//	turns out I had the wrong PTM diameter 52mm.
+//	Diameter of photocathode must be 45mm
+
+//03.10.2017: turns out the WLS must have been only a circle 70mm in diameter.
+//	I need dSigma/4Pi, so QE is set = 1
+//	TODO: add defines and new simulation
+
+#define CIRCULAR_WLS_
+//  TODO: There is gas instead of LAr where WLS used to be.
+//I don't think that's so important, but nonetheless.
+#ifdef CIRCULAR_WLS_
+#define WLS_RADIUS_ 35*mm
+#endif
+
 //#define DEBUG_MC_NODES
 
 //#define TOP_MESH_TEST
@@ -45,6 +60,7 @@
 //#define ZERO_CE_
 //#define UNITY_CE_
 //#define NO_BACK_SCATTERING
+//^kills photon if it goes inside the interior volume
 //#define NO_VUV_WLS_FRESNEL
 //#define AVERAGE_QE_
 #define NO_Xp_WLS
@@ -54,7 +70,7 @@
 //otherwise 128nm line is taken
 #ifdef AR_EMISSION_NITRO
 //#define AR_SPEC_TEST
-//^if defiened, then no memory decrease, top absorbed behind mesh is detector, all photons go through GEM to it;
+//^if defiened, then no memory decrease, top absorber behind the mesh is detector, all photons go through GEM to it;
 //^and get_detected_spectrum called after simulation. All in order to check Ar emission spectrum generation
 #endif
 
@@ -79,7 +95,7 @@
 //^marks everything that is temporary so I don't forget
 #define WLS_FILM_WIDTH 100*micrometer
 #define PMMA_WIDTH 1.5*mm
-#define PMT_DIAMETER 51*mm
+#define PMT_DIAMETER 45*mm
 #define plate_W	0.6
 #define plate_real_W 0.5
 //\/from top GEM's container (plate_W) to the center

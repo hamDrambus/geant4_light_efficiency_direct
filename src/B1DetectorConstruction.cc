@@ -617,9 +617,9 @@ G4VPhysicalVolume* B1DetectorConstruction::Construct()
   // World
   //
   G4double world_sizeXY = (141+2*(4+2+1+1)) * mm+2*(WLS_FILM_WIDTH+PMMA_WIDTH);
-  G4double world_sizeZ  = (20+plate_W+18+4+plate_W+20+2*(1+1))*mm;
+  G4double world_sizeZ = (50/*without this 50 WLS can't be 70mm in D */ + 20 + plate_W + 18 + 4 + plate_W + 20 + 2 * (1 + 1))*mm;
   G4double envelope_sizeXY = (141 + 2 * (4 + 2 + 1)) * mm + 2 * (WLS_FILM_WIDTH + PMMA_WIDTH);
-  G4double envelope_sizeZ = (20 + plate_W + 18 + 4 + plate_W + 20 + 2 * (1))*mm;
+  G4double envelope_sizeZ = (50/*without this 50 WLS can't be 70mm in D */ + 20 + plate_W + 18 + 4 + plate_W + 20 + 2 * (1))*mm;
 
   G4Box* solidWorld = new G4Box("World", 0.5*world_sizeXY, 0.5*world_sizeXY, 0.5*world_sizeZ);
   world = new G4LogicalVolume(solidWorld, Ar_mat,"World");
@@ -631,7 +631,7 @@ G4VPhysicalVolume* B1DetectorConstruction::Construct()
 
   G4double box_sizeXY = (141 + 2 * (2)) * mm + 2 * (WLS_FILM_WIDTH + PMMA_WIDTH); 
   //^includes gap between PMT (window) and acrylic. Liquid in that gap is placed here 
-  G4double box_sizeZ = (20 + plate_W + 18 + 4 + plate_W + 20)*mm;
+  G4double box_sizeZ = (20 + plate_W + 18 + 4 + plate_W + 20 + 50/*without this 50 WLS can't be 70mm in D */)*mm;
   G4Box* solid_box = new G4Box("MainBox", 0.5*box_sizeXY, 0.5*box_sizeXY, 0.5 *box_sizeZ); //volume exluding detectors
   box = new G4LogicalVolume(solid_box, Ar_mat, "MainBox");
   G4VPhysicalVolume* phys_box = new G4PVPlacement(0, G4ThreeVector(0,0,0), box, "MainBox", envelope, false, 0, checkOverlaps);
@@ -784,12 +784,18 @@ G4VPhysicalVolume* B1DetectorConstruction::Construct()
 	  -(0.5*(18 + 4) + plate_W + 0.5*(ABSORBER_OFFSET_BOT - 0.5*plate_real_W))*mm), bot_LAr_layer,
 	  "BotLArLayer", box, false, 0, checkOverlaps);
 
+#ifdef CIRCULAR_WLS_
+  G4Tubs* solid_x_WLS = new G4Tubs("wls", 0, WLS_RADIUS_, (WLS_FILM_WIDTH) / 2, 0 * deg, 360 * deg);
+  G4Tubs* solid_y_WLS = new G4Tubs("wls", 0, WLS_RADIUS_, (WLS_FILM_WIDTH) / 2, 0 * deg, 360 * deg);
+#else
   G4Box* solid_x_WLS = new G4Box("x_WLS", 0.5*(WLS_FILM_WIDTH), 0.5*(141 * mm + WLS_FILM_WIDTH), 0.5 *(box_sizeZ));
   G4Box* solid_y_WLS = new G4Box("y_WLS", 0.5*(141 * mm + WLS_FILM_WIDTH), 0.5*(WLS_FILM_WIDTH), 0.5 *(box_sizeZ));
+#endif
   G4Box* solid_x_Acrylic = new G4Box("x_Acrylic", 0.5*(PMMA_WIDTH), 0.5*(141 * mm + PMMA_WIDTH + 2*WLS_FILM_WIDTH), 0.5 *(box_sizeZ));
   G4Box* solid_y_Acrylic = new G4Box("y_Acrylic", 0.5*(141 * mm + PMMA_WIDTH + 2*WLS_FILM_WIDTH), 0.5*(PMMA_WIDTH), 0.5 *(box_sizeZ));
   G4Box* solid_y_LArGap = new G4Box("y_LArGap", 0.5*(141 * mm + 2 * (WLS_FILM_WIDTH + PMMA_WIDTH) + 2 * mm), 0.5*(2 * mm), 0.5 *(4 + 0.5 + 20)*mm);
   G4Box* solid_x_LArGap = new G4Box("x_LArGap", 0.5*(2 * mm), 0.5*(141 * mm + 2 * (WLS_FILM_WIDTH + PMMA_WIDTH) + 2 * mm), 0.5 *(4 + 0.5 + 20)*mm);
+
 
 #if !defined(NO_Xp_WLS)
   Xp_wls = new G4LogicalVolume(solid_x_WLS, WLS_mat, "X_PositiveWLS");
@@ -806,21 +812,42 @@ G4VPhysicalVolume* B1DetectorConstruction::Construct()
   Yp_LAr_gap = new G4LogicalVolume(solid_y_LArGap, LAr_mat, "Y_PositiveLArGap");
   Yn_LAr_gap = new G4LogicalVolume(solid_y_LArGap, LAr_mat, "Y_NegativeLArGap");
 
+#ifdef CIRCULAR_WLS_
+  G4RotationMatrix *x_rot_WLS = new G4RotationMatrix();
+  G4RotationMatrix *y_rot_WLS = new G4RotationMatrix();
+  x_rot_WLS->rotateY(90 * deg);
+  y_rot_WLS->rotateX(90 * deg);
+#endif
+
 #if !defined(NO_Xp_WLS)
+#ifdef CIRCULAR_WLS_
+  G4VPhysicalVolume* phys_Xp_WLS = new G4PVPlacement(x_rot_WLS, G4ThreeVector(+0.5*(141 * mm + WLS_FILM_WIDTH), -0.5*(WLS_FILM_WIDTH), 0),
+	  Xp_wls, "X_PositiveWLS", box, false, 0, checkOverlaps);
+#else
   G4VPhysicalVolume* phys_Xp_WLS = new G4PVPlacement(0, G4ThreeVector(+0.5*(141*mm+WLS_FILM_WIDTH), -0.5*(WLS_FILM_WIDTH), 0),
 	  Xp_wls, "X_PositiveWLS", box, false, 0, checkOverlaps);
+#endif
 #else
   G4Box* solid_x_WLS_LAr = new G4Box("x_WLS_LAr", 0.5*(WLS_FILM_WIDTH), 0.5*(141 * mm + WLS_FILM_WIDTH), 0.5*(4 + plate_W + 20)*mm);
   Xp_wls = new G4LogicalVolume(solid_x_WLS_LAr, LAr_mat, "X_PositiveWlsLAr");
-  G4VPhysicalVolume* phys_Xp_WLS = new G4PVPlacement(0, G4ThreeVector(+0.5*(141 * mm + WLS_FILM_WIDTH), -0.5*(WLS_FILM_WIDTH), -((11 - 4) + 0.5*(4 + plate_W + 20))*mm),
-	  Xp_wls, "X_PositiveWLS", box, false, 0, checkOverlaps);
+  G4VPhysicalVolume* phys_Xp_WLS = new G4PVPlacement(0, G4ThreeVector(+0.5*(141 * mm + WLS_FILM_WIDTH), -0.5*(WLS_FILM_WIDTH),
+	  -((11 - 4) + 0.5*(4 + plate_W + 20))*mm), Xp_wls, "X_PositiveWLS", box, false, 0, checkOverlaps);
 #endif
+#ifdef CIRCULAR_WLS_
+  G4VPhysicalVolume* phys_Xn_WLS = new G4PVPlacement(x_rot_WLS, G4ThreeVector(-0.5*(141 * mm + WLS_FILM_WIDTH), +0.5*(0), 0),
+	  Xn_wls, "X_NegativeWLS", box, false, 0, checkOverlaps);
+  G4VPhysicalVolume* phys_Yp_WLS = new G4PVPlacement(y_rot_WLS, G4ThreeVector(+0.5*(0), +0.5*(141 * mm + WLS_FILM_WIDTH), 0),
+	  Yp_wls, "Y_PositiveWLS", box, false, 0, checkOverlaps);
+  G4VPhysicalVolume* phys_Yn_WLS = new G4PVPlacement(y_rot_WLS, G4ThreeVector(-0.5*(0), -0.5*(141 * mm + WLS_FILM_WIDTH), 0),
+	  Yn_wls, "Y_NegativeWLS", box, false, 0, checkOverlaps);
+#else
   G4VPhysicalVolume* phys_Xn_WLS = new G4PVPlacement(0, G4ThreeVector(-0.5*(141 * mm + WLS_FILM_WIDTH), +0.5*(WLS_FILM_WIDTH), 0),
 	  Xn_wls, "X_NegativeWLS", box, false, 0, checkOverlaps);
   G4VPhysicalVolume* phys_Yp_WLS = new G4PVPlacement(0, G4ThreeVector(+0.5*(WLS_FILM_WIDTH), +0.5*(141 * mm + WLS_FILM_WIDTH), 0),
 	  Yp_wls, "Y_PositiveWLS", box, false, 0, checkOverlaps);
   G4VPhysicalVolume* phys_Yn_WLS = new G4PVPlacement(0, G4ThreeVector(-0.5*(WLS_FILM_WIDTH), -0.5*(141 * mm + WLS_FILM_WIDTH), 0),
 	  Yn_wls, "Y_NegativeWLS", box, false, 0, checkOverlaps);
+#endif
 
   G4VPhysicalVolume* phys_Xp_Acrylic = new G4PVPlacement(0, G4ThreeVector(0.5*(141 * mm +2*WLS_FILM_WIDTH+PMMA_WIDTH), -0.5*(PMMA_WIDTH), 0),
 	  Xp_acrylic, "X_PositiveAcrylic", box, false, 0, checkOverlaps);

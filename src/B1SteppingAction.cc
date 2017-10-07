@@ -40,8 +40,14 @@ void B1SteppingAction::UserSteppingAction(const G4Step* step)
 	  step->GetTrack()->SetTrackStatus(fStopAndKill); //kills if photon goes inside interior volume
   }
 #endif
-  if (manman->ev_history)
-	  manman->ev_history->SteppingProc(step);
+  manman->sim_results->SteppingProc(step);
+  if (step->GetPostStepPoint()->GetLocalTime() > 1000)
+  {
+	  G4cout << "Stuck photon, seting 0 hit"<<std::endl;
+	  step->GetTrack()->SetTrackStatus(fStopAndKill);
+	  manman->SetHit(-2);
+	  return;
+  }
   if (step->GetTrack()->GetTrackStatus() == fStopAndKill) //TODO: in case some process killed the track, I need to handle events properly
   {
 	  manman->SetHit(0);

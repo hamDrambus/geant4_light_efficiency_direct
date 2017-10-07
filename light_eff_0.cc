@@ -132,7 +132,7 @@ int main(int argc,char** argv)
 #ifdef AR_SPEC_TEST
 	  runManager->BeamOn(700000);
 #else
-  runManager->BeamOn(50000000);
+  runManager->BeamOn(5000000);
 #endif
 #else
   runManager->BeamOn(5000000);
@@ -143,7 +143,6 @@ int main(int argc,char** argv)
   time(&timer_end);
   G4double seconds = difftime(timer_end, timer_start);
   G4cout<<*(runManager->sim_results);
-  G4cout << *(runManager->ev_history);
   //DONE - no, no problem: TODO figure out: messed up with the names for some reason
   //G4cout << "total events proceded: " << (runManager->sim_results->Num_of_events())+(runManager->extra_run_id) << G4endl;
   G4cout << "Time elapsed: "<< ((int)seconds/3600)<<"h "<<((int)seconds % 3600)/60<<"m "<<(int)seconds % 60<<"s"<<G4endl;
